@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Type-Shift Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center p-6">
+
+    <div class="max-w-md w-full bg-slate-800 rounded-xl shadow-2xl p-8 border border-slate-700">
+        <h1 class="text-2xl font-bold mb-6 text-center text-blue-400">Type-Shift</h1>
+        
+        <div id="drop-zone" class="border-2 border-dashed border-slate-600 rounded-lg p-10 text-center cursor-pointer hover:border-blue-500 transition-colors mb-6">
+            <p id="file-label">Drag & drop a file here or click to browse</p>
+            <input type="file" id="file-input" class="hidden">
+        </div>
+
+        <div class="mb-6">
+            <label class="block text-sm font-medium mb-2">Convert to:</label>
+            <select id="format-select" class="w-full bg-slate-700 border border-slate-600 rounded p-2 text-white">
+                <option value="mp3">MP3 (Audio)</option>
+                <option value="jpg">JPEG (Image)</option>
+                <option value="webp">WebP (Image)</option>
+                <option value="pdf">PDF (Compress)</option>
+                <option value="gif">GIF (Animation)</option>
+            </select>
+        </div>
+
+        <button id="convert-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-all disabled:opacity-50">
+            Start Conversion
+        </button>
+
+        <div id="status-container" class="mt-6 hidden">
+            <div class="flex items-center justify-between mb-2">
+                <span id="status-text" class="text-sm font-mono text-slate-400">Processing...</span>
+                <span id="loader" class="animate-spin text-blue-500">🌀</span>
+            </div>
+            <a id="download-link" href="#" class="hidden block text-center bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg font-bold">Download File</a>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const convertBtn = document.getElementById('convert-btn');
+        const statusContainer = document.getElementById('status-container');
+        const statusText = document.getElementById('status-text');
+        const downloadLink = document.getElementById('download-link');
+        const loader = document.getElementById('loader');
+
+        let selectedFile = null;
+
+        // Drag & Drop Handlers
+        dropZone.onclick = () => fileInput.click();
+        
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('border-blue-500'); };
+        dropZone.ondragleave = () => dropZone.classList.remove('border-blue-500');
+        
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-500');
+            handleFile(e.dataTransfer.files[0]);
+        };
+
+        fileInput.onchange = (e) => handleFile(e.target.files[0]);
+
+        function handleFile(file) {
+            if (!file) return;
+            selectedFile = file;
+            document.getElementById('file-label').innerText = `Selected: ${file.name}`;
+        }
+
+        // Logic to trigger the Backend
+        convertBtn.onclick = async () => {
+            if (!selectedFile) return alert("Please select a file first");
+            
+            const format = document.getElementById('format-select').value;
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            // UI Reset
+            statusContainer.classList.remove('hidden');
+            downloadLink.classList.add('hidden');
+            loader.classList.remove('hidden');
+            statusText.innerText = "Uploading...";
+
+            try {
+                // 1. Initial POST
+                const response = await fetch(`/convert/${format}`, { method: 'POST', body: formData });
+                const { task_id } = await response.json();
+
+                // 2. Poll Status
+                pollStatus(task_id);
+            } catch (err) {
+                statusText.innerText = "Error uploading file.";
+            }
+        };
+
+        async function pollStatus(taskId) {
+            const interval = setInterval(async () => {
+                const res = await fetch(`/status/${taskId}`);
+                const data = await res.json();
+                
+                statusText.innerText = `Status: ${data.status}`;
+
+                if (data.status === 'completed') {
+                    clearInterval(interval);
+                    loader.classList.add('hidden');
+                    downloadLink.classList.remove('hidden');
+                    downloadLink.href = `/download/${taskId}`;
+                } else if (data.status === 'failed') {
+                    clearInterval(interval);
+                    loader.classList.add('hidden');
+                    statusText.innerText = "Conversion failed.";
+                }
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
