@@ -71,7 +71,6 @@
             document.getElementById('file-label').innerText = `Selected: ${file.name}`;
         }
 
-        // Logic to trigger the Backend
         convertBtn.onclick = async () => {
             if (!selectedFile) return alert("Please select a file first");
             
@@ -79,21 +78,29 @@
             const formData = new FormData();
             formData.append('file', selectedFile);
 
-            // UI Reset
             statusContainer.classList.remove('hidden');
             downloadLink.classList.add('hidden');
             loader.classList.remove('hidden');
             statusText.innerText = "Uploading...";
+            statusText.classList.remove('text-red-500'); // Reset color
 
             try {
-                // 1. Initial POST
                 const response = await fetch(`/convert/${format}`, { method: 'POST', body: formData });
-                const { task_id } = await response.json();
+                const data = await response.json();
 
-                // 2. Poll Status
-                pollStatus(task_id);
+                if (!response.ok) {
+                    loader.classList.add('hidden');
+                    statusText.innerText = `Error: ${data.detail || 'Upload failed'}`;
+                    statusText.classList.add('text-red-500'); 
+                    return; 
+                }
+
+                pollStatus(data.task_id);
+
             } catch (err) {
-                statusText.innerText = "Error uploading file.";
+                loader.classList.add('hidden');
+                statusText.innerText = "Network error. Is the server running?";
+                statusText.classList.add('text-red-500');
             }
         };
 
